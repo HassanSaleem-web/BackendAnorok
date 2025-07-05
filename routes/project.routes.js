@@ -9,6 +9,7 @@ const { saveOrUpdateProject } = require('../controllers/project.controller');
 // GET /api/projects
 router.get('/', async (req, res) => {
   try {
+    console.log("I am here");
     const projects = await Project.find();
     res.json(projects);
   } catch (err) {
