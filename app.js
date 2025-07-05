@@ -15,7 +15,7 @@ app.use(express.json());
 
 // ✅ CORS middleware should come BEFORE routes
 app.use(cors({
-  origin: 'http://localhost:5500',
+  origin: 'https://dashboard-duh5.onrender.com',
   methods: ['GET', 'POST'],
   credentials: false
 }));

@@ -5,7 +5,6 @@ const chatcontroller = require('../controllers/chat.controller.js');
 
 router.post('/', chatcontroller.handleChat);
 router.post('/save', chatcontroller.saveChatSession);
-
 router.post('/save', (req, res) => {
     const { session } = req.body;
   
