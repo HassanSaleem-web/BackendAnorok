@@ -14,10 +14,24 @@ const app = express();
 app.use(express.json());
 
 // ✅ CORS middleware should come BEFORE routes
+const allowedOrigins = [
+  'https://dashboard-duh5.onrender.com',
+  'http://localhost:5500',
+];
+
 app.use(cors({
-  origin: 'https://dashboard-duh5.onrender.com',
+  origin: function (origin, callback) {
+    // allow requests with no origin (like mobile apps, curl, etc.)
+    if (!origin) return callback(null, true);
+
+    if (allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    } else {
+      return callback(new Error('Not allowed by CORS'));
+    }
+  },
   methods: ['GET', 'POST'],
-  credentials: false
+  credentials: false,
 }));
 
 // ✅ Now register your routes
