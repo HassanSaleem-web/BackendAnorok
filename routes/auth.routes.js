@@ -10,7 +10,8 @@ router.get(
     failureRedirect: '/api/auth/failure',
   }),
   (req, res) => {
-    res.redirect('http://localhost:50945/');
+    res.redirect('https://dashboard-duh5.onrender.com/');
+
   }
 );
 
