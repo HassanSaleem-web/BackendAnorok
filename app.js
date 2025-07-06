@@ -34,18 +34,14 @@ app.use(cors({
   credentials: false,
 }));
 
-// ✅ Now register your routes
-app.use('/api/projects', projectRoutes);
-app.use('/api/chat', chatRoutes);
-app.use('/api/auth', authRoutes);
-
+// Session & Passport middleware must come FIRST
 app.use(
   session({
     secret: process.env.SESSION_SECRET,
     resave: false,
     saveUninitialized: false,
     cookie: {
-      secure: false, // change to true with HTTPS
+      secure: false,
       httpOnly: true,
       maxAge: 24 * 60 * 60 * 1000,
     },
@@ -53,5 +49,11 @@ app.use(
 );
 app.use(passport.initialize());
 app.use(passport.session());
+
+// Now register your routes AFTER session & passport
+app.use('/api/projects', projectRoutes);
+app.use('/api/chat', chatRoutes);
+app.use('/api/auth', authRoutes);
+
 
 module.exports = app;
