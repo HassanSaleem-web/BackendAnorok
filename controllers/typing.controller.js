@@ -1,4 +1,4 @@
-const TypingState = require("../models/TypingState");
+const TypingState = require("../models/Typingstate");
 
 // --------------------------------------
 // SET TYPING STATUS
