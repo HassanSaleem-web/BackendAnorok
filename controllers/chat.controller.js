@@ -2,89 +2,31 @@ const axios = require('axios');
 require('dotenv').config();
 const Project = require('../models/Project');
 
+
+// ------------------------------------
+// 1️⃣ Chat Endpoint (simple Q/A)
+// ------------------------------------
 exports.handleChat = async (req, res) => {
-    const { userMessage } = req.body;
-    console.log("🟢 Incoming request to /api/chat");
-    console.log("📝 Request body:", req.body);
-  
-    if (!userMessage) {
-      console.warn("⚠️ Missing user message");
-      return res.status(400).json({ error: 'Missing user message' });
-    }
-  
-    // Keep conversation in memory for this session only
-    const messages = [
-      { role: 'system', content: 'You are a helpful assistant for discussing and planning projects.' },
-      { role: 'user', content: userMessage }
-    ];
-  
-    try {
-      const response = await axios.post(
-        'https://openrouter.ai/api/v1/chat/completions',
-        {
-          model: 'mistralai/mistral-7b-instruct:free',
-          messages,
-        },
-        {
-          headers: {
-            Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
-            'Content-Type': 'application/json',
-          },
-        }
-      );
-  
-      const reply = response.data.choices[0].message.content.trim();
-      console.log("✅ Mistral reply:", reply);
-  
-      res.json({ reply });
-    } catch (error) {
-      console.error('🔴 Chat error:', error.response?.data || error.message);
-      res.status(500).json({ error: 'Chat processing failed' });
-    }
-  };
-  
+  const { userMessage } = req.body;
+  console.log("🟢 Incoming request to /api/chat");
+  console.log("📝 Request body:", req.body);
 
-// Handles saving a chat session to database
-exports.saveChatSession = async (req, res) => {
-  const { session, username = 'anonymous' } = req.body;
-
-  if (!session || !Array.isArray(session)) {
-    return res.status(400).json({ success: false, error: 'Invalid session data' });
+  if (!userMessage) {
+    console.warn("⚠️ Missing user message");
+    return res.status(400).json({ error: 'Missing user message' });
   }
 
-  const fullChat = session.map(msg => `${msg.role}: ${msg.content}`).join('\n');
+  const messages = [
+    { role: 'system', content: 'You are a helpful assistant for discussing and planning projects.' },
+    { role: 'user', content: userMessage }
+  ];
 
   try {
-    const summaryResponse = await axios.post(
+    const response = await axios.post(
       'https://openrouter.ai/api/v1/chat/completions',
       {
-        model: 'mistralai/mistral-7b-instruct:free',
-        messages: [
-          { role: 'system', content: 'You are a helpful assistant that extracts structured project info.' },
-          {
-            role: 'user',
-            content:
-`Analyze the following conversation and return:
-1. A short project title (max 60 characters)
-2. A detailed project summary
-3. A list of 4 to 6 key milestones, each with:
-
-Title: <...>
-Description: <...>
-
-Format:
-Title: ...
-Summary: ...
-Milestones:
-1. ...
-   Description: ...
-2. ...
-   Description: ...
-...
-Conversation:
-${fullChat}`
-          }
-        ]
+        model: 'x-ai/grok-4.1-fast',
+        messages,
       },
       {
         headers: {
@@ -94,18 +36,108 @@ ${fullChat}`
       }
     );
 
-    const content = summaryResponse.data.choices[0].message.content.trim();
-    console.log('🧠 Parsed Response:\n', content);
+    const reply = response.data.choices[0].message.content.trim();
+    console.log("✅ Mistral reply:", reply);
 
+    res.json({ reply });
+
+  } catch (error) {
+    console.error('🔴 Chat error:', error.response?.data || error.message);
+    res.status(500).json({ error: 'Chat processing failed' });
+  }
+};
+
+
+
+// ------------------------------------
+// 2️⃣ Save Chat as a Project
+// ------------------------------------
+exports.saveChatSession = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { userMessage } = req.body;    // Full chat array from frontend TheLab
+
+    if (!userMessage || !Array.isArray(userMessage)) {
+      return res.status(400).json({ success: false, error: "Chat session must be an array" });
+    }
+
+    // Convert chat → transcript for AI
+    const fullChat = userMessage
+      .map(m => `${m.role}: ${m.content}`)
+      .join('\n');
+
+    // Ask AI to summarize + create milestones
+    const aiResponse = await axios.post(
+      "https://openrouter.ai/api/v1/chat/completions",
+      {
+        model: "x-ai/grok-4.1-fast",
+        messages: [
+          {
+            role: "system",
+            content: `
+    You MUST respond ONLY in the following strict structure:
+    
+    Title: <short project title, max 60 chars>
+    
+    Summary:
+    <one paragraph summary>
+    
+    Milestones:
+    1. <milestone title>
+       Description: <milestone description>
+    2. <milestone title>
+       Description: <milestone description>
+    3. <milestone title>
+       Description: <milestone description>
+    
+    MANDATORY RULES:
+    - DO NOT use markdown (#, ##, **, ###, ---).
+    - DO NOT use emojis.
+    - DO NOT add any extra text before or after the structure.
+    - DO NOT change the section titles ("Title:", "Summary:", "Milestones:").
+    - DO NOT skip the Summary section.
+    - DO NOT skip the Milestones section.
+    - Milestones MUST be numbered exactly using "1.", "2.", "3.".
+    - Each milestone MUST include a "Description:" on the next line.
+    - All responses MUST be plain text only.
+    `
+          },
+          { role: "user", content: fullChat }
+        ]
+      },
+      {
+        headers: {
+          "Authorization": `Bearer ${process.env.OPENROUTER_API_KEY}`,
+          "Content-Type": "application/json"
+        }
+      }
+    );
+    
+    const content = aiResponse.data.choices[0].message.content.trim();
+    console.log("🧠 AI Structured Response:\n", content);
+
+    // -------------------------------
+    // Extract Title
+    // -------------------------------
     const titleMatch = content.match(/Title:\s*(.*)/i);
+    const projectName = titleMatch
+      ? titleMatch[1].trim().slice(0, 60)
+      : "Untitled Project";
+
+    // -------------------------------
+    // Extract Summary
+    // -------------------------------
     const summaryMatch = content.match(/Summary:\s*([\s\S]*?)Milestones:/i);
+    const chatSummary = summaryMatch
+      ? summaryMatch[1].trim()
+      : "No summary available.";
+
+    // -------------------------------
+    // Extract Milestones
+    // -------------------------------
     const milestonesMatch = content.match(/Milestones:\s*([\s\S]*)/i);
+    const milestonesRaw = milestonesMatch ? milestonesMatch[1].trim() : "";
 
-    const title = titleMatch ? titleMatch[1].trim().slice(0, 60).replace(/[^a-zA-Z0-9 ]/g, '') : 'Untitled Project';
-    const chatSummary = summaryMatch ? summaryMatch[1].trim() : 'No summary available.';
-    const milestonesRaw = milestonesMatch ? milestonesMatch[1].trim() : '';
-
-    // 👇 Fix: Split on lines like: "1. Something", "2. Something else"
     const milestoneBlocks = milestonesRaw.split(/\n(?=\d+\.\s)/g);
 
     const milestones = milestoneBlocks.map((block, index) => {
@@ -114,32 +146,33 @@ ${fullChat}`
 
       return {
         step: index + 1,
-        title: titleMatch ? titleMatch[1].trim() : `Step ${index + 1}`,
-        description: descriptionMatch ? descriptionMatch[1].trim() : '',
-        completed: false,
+        title: titleMatch ? titleMatch[1].trim() : `Milestone ${index + 1}`,
+        description: descriptionMatch ? descriptionMatch[1].trim() : "",
+        completed: false
       };
     });
 
-    console.log("📌 Final Parsed Milestones:", milestones);
+    console.log("📌 FINAL PARSED MILESTONES:", milestones);
 
-    const project = new Project({
-      username,
-      title,
+    // -------------------------------
+    // Create Project using NEW model
+    // -------------------------------
+    const project = await Project.create({
+      userId,
+      projectName,
+      projectLogo: "",
+      message: fullChat,
       chatSummary,
       milestones,
       tools: []
     });
 
-    await project.save();
-    console.log('✅ Project saved with milestones:', project._id);
+    console.log("✅ Project created:", project._id);
 
     res.json({ success: true, project });
+
   } catch (err) {
-    console.error('🔴 Failed to generate/save project:', err.message);
-    res.status(500).json({ success: false, error: 'Failed to generate or save project summary' });
+    console.error("❌ Error saving chat as project:", err);
+    res.status(500).json({ success: false, error: "Failed to save project" });
   }
 };
-
-
-  
-  

@@ -11,20 +11,44 @@ const milestoneSchema = new mongoose.Schema({
 });
 
 const projectSchema = new mongoose.Schema({
+  userId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "User",
+    required: true
+  },
+
   username: {
     type: String,
-    required: false // could be replaced with session ID or email later
+    required: false
   },
-  title: {
+
+  message: {
     type: String,
     required: true
   },
+
+  projectName: {
+    type: String,
+    required: true
+  },
+
+  projectLogo: {
+    type: String
+  },
+
   chatSummary: {
     type: String,
     required: true
   },
+
   milestones: [milestoneSchema],
   tools: [String],
+  
+  status: {
+    type: String,
+    enum: ["live", "listed"],
+    default: "live"
+  },
   createdAt: {
     type: Date,
     default: Date.now

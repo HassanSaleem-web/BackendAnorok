@@ -1,32 +1,15 @@
 const express = require('express');
-const passport = require('passport');
 const router = express.Router();
+const { signup, login, getMe } = require('../controllers/auth.controller');
+const authMiddleware = require('../middleware/auth.middleware');
+const { getUserById } = require('../controllers/auth.controller');
+// POST /api/auth/signup
+router.post('/signup', signup);
 
-router.get('/google', passport.authenticate('google', { scope: ['profile', 'email'] }));
+// POST /api/auth/login
+router.post('/login', login);
 
-router.get(
-  '/google/callback',
-  passport.authenticate('google', {
-    failureRedirect: '/api/auth/failure',
-  }),
-  (req, res) => {
-    res.redirect('https://dashboard-duh5.onrender.com/');
-
-  }
-);
-
-router.get('/success', (req, res) => {
-  res.json({ message: 'Logged in with Google', user: req.user });
-});
-
-router.get('/failure', (req, res) => {
-  res.status(401).json({ error: 'Google login failed' });
-});
-
-router.get('/logout', (req, res) => {
-  req.logout(() => {
-    res.json({ message: 'Logged out successfully' });
-  });
-});
-
+// GET /api/auth/me
+router.get('/me', authMiddleware, getMe);
+router.get('/user/:id', authMiddleware, getUserById);
 module.exports = router;

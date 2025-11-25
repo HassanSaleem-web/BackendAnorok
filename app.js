@@ -1,59 +1,55 @@
 const express = require('express');
 const cors = require('cors');
-const passport = require('passport');
-const session = require('express-session');
+require('dotenv').config();
+
+// Existing routes
 const chatRoutes = require('./routes/chat.routes');
 const projectRoutes = require('./routes/project.routes');
-
-require('dotenv').config();
-require('./auth/google.strategy');
-
 const authRoutes = require('./routes/auth.routes');
+const listingRoutes = require("./routes/listing.routes");
+const typingroute= require("./routes/typing.routes")
+// 👉 NEW: Messages routes (user-to-user chat)
+const messagesRoutes = require("./routes/messages.routes");
 
 const app = express();
 app.use(express.json());
 
-// ✅ CORS middleware should come BEFORE routes
+// -----------------------------------------------
+// ✅ CORS CONFIGURATION 
+// -----------------------------------------------
 const allowedOrigins = [
+  process.env.CLIENT_ORIGIN,
   'https://dashboard-duh5.onrender.com',
-  'http://localhost:5500',
+  'http://localhost:3000',
+  'http://127.0.0.1:5500'
 ];
 
-app.use(cors({
-  origin: function (origin, callback) {
-    // allow requests with no origin (like mobile apps, curl, etc.)
-    if (!origin) return callback(null, true);
-
-    if (allowedOrigins.includes(origin)) {
-      return callback(null, true);
-    } else {
-      return callback(new Error('Not allowed by CORS'));
-    }
-  },
-  methods: ['GET', 'POST'],
-  credentials: false,
-}));
-
-// Session & Passport middleware must come FIRST
+// Allow undefined origin (curl, mobile apps)
 app.use(
-  session({
-    secret: process.env.SESSION_SECRET,
-    resave: false,
-    saveUninitialized: false,
-    cookie: {
-      secure: false,
-      httpOnly: true,
-      maxAge: 24 * 60 * 60 * 1000,
+  cors({
+    origin: function (origin, callback) {
+      if (!origin || allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        console.warn(`❌ CORS blocked origin: ${origin}`);
+        callback(new Error('Not allowed by CORS'));
+      }
     },
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    credentials: false,
   })
 );
-app.use(passport.initialize());
-app.use(passport.session());
 
-// Now register your routes AFTER session & passport
+// -----------------------------------------------
+// ✅ ROUTES
+// -----------------------------------------------
 app.use('/api/projects', projectRoutes);
+app.use("/api/listings", listingRoutes);
 app.use('/api/chat', chatRoutes);
 app.use('/api/auth', authRoutes);
 
+// 👉 NEW: Messages API
+app.use('/api/messages', messagesRoutes);
+app.use("/api/typing", typingroute);
 
 module.exports = app;
