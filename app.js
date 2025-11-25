@@ -19,7 +19,7 @@ app.use(express.json());
 // -----------------------------------------------
 const allowedOrigins = [
   process.env.CLIENT_ORIGIN,
-  'https://dashboard-duh5.onrender.com',
+  'https://dashboard-3wi1.onrender.com/',
   'http://localhost:3000',
   'http://127.0.0.1:5500'
 ];
