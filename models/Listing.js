@@ -6,14 +6,33 @@ const bidSchema = new mongoose.Schema({
     ref: "User",
     required: true
   },
-  amount: { type: Number, required: true },
-  message: { type: String, default: "" },
+
+  amount: {
+    type: Number,
+    required: true
+  },
+
+  message: {
+    type: String,
+    default: ""
+  },
+
   status: {
     type: String,
     enum: ["pending", "accepted", "rejected", "paid"],
     default: "pending"
   },
-  createdAt: { type: Date, default: Date.now }
+
+  // ✅ NEW: Wallet address where bidder must send payment
+  walletAddress: {
+    type: String,
+    default: null
+  },
+
+  createdAt: {
+    type: Date,
+    default: Date.now
+  }
 });
 
 const ListingSchema = new mongoose.Schema(
@@ -37,8 +56,13 @@ const ListingSchema = new mongoose.Schema(
 
     tags: { type: [String], default: [] },
 
+    // 🔹 Minimum bid amount
     price: { type: Number, default: 0 },
-    priceType: { type: String, enum: ["fixed", "hourly"], default: "fixed" },
+    priceType: {
+      type: String,
+      enum: ["fixed", "hourly"],
+      default: "fixed"
+    },
 
     deadline: { type: Date, default: null },
     percentageCompleted: { type: Number, default: 0 },
@@ -63,7 +87,7 @@ const ListingSchema = new mongoose.Schema(
       default: null
     },
 
-    // 🔹 SALE DATA
+    // 🔹 SALE DATA (filled after on-chain payment)
     soldTo: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",

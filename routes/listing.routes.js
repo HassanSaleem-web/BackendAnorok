@@ -14,7 +14,9 @@ const {
   placeBid,
   rejectBid,
   acceptBid,
-  getListingBids
+  getListingBids,
+  getPaymentInfo,
+  confirmPayment
 } = require("../controllers/listing.controller");
 const { authenticate } = require("passport");
 
@@ -58,6 +60,9 @@ router.put("/:id/bids/:bidId/accept", auth, acceptBid);
 
 // Reject bid (owner only)
 router.put("/:id/bids/:bidId/reject", auth, rejectBid);
+
+router.get("/:listingId/payment-info", auth, getPaymentInfo);
+router.post("/:listingId/confirm-payment", auth, confirmPayment);
 
 
 module.exports = router;

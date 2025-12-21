@@ -205,6 +205,14 @@ exports.placeBid = async (req, res) => {
       return res.status(400).json({ message: "Invalid bid amount" });
     }
 
+    // ✅ ADD THIS BLOCK HERE
+    if (Number(amount) < Number(listing.minimumAmount)) {
+      return res.status(400).json({
+        success: false,
+        message: `Minimum bid is ${listing.minimumAmount} ETH`
+      });
+    }
+
     const existingBid = listing.bids.find(
       (b) =>
         b.userId.toString() === req.user.id.toString() &&
@@ -234,6 +242,7 @@ exports.placeBid = async (req, res) => {
     res.status(500).json({ message: "Failed to place bid" });
   }
 };
+
 // --------------------------------------------------
 // GET BIDS FOR LISTING
 // --------------------------------------------------
@@ -305,6 +314,21 @@ exports.acceptBid = async (req, res) => {
     if (!listing) {
       return res.status(404).json({ message: "Listing not found" });
     }
+    const { walletAddress } = req.body;
+
+    if (!walletAddress) {
+      return res.status(400).json({
+        success: false,
+        message: "Wallet address is required to accept a bid"
+      });
+    }
+    // basic validation (recommended)
+    if (!/^0x[a-fA-F0-9]{40}$/.test(walletAddress)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid wallet address"
+      });
+    }
 
     if (listing.userId.toString() !== req.user.id.toString()) {
       return res.status(403).json({ message: "Unauthorized" });
@@ -316,6 +340,7 @@ exports.acceptBid = async (req, res) => {
     }
 
     bid.status = "accepted";
+    bid.walletAddress = walletAddress;
     listing.winningBidId = bid._id;
     listing.soldTo = bid.userId;
     listing.soldAt = new Date();
@@ -335,3 +360,37 @@ exports.acceptBid = async (req, res) => {
     res.status(500).json({ message: "Failed to accept bid" });
   }
 };
+
+exports.getPaymentInfo = async (req, res) => {
+  console.log(req.params.listingId);
+  const listing = await Listing.findById(req.params.listingId);
+  
+  if (!listing) {
+    return res.status(404).json({ message: "Listing not found" });
+  }
+
+  const bid = listing.bids.find(b => b.status === "accepted");
+  if (!bid) {
+    return res.status(400).json({ message: "No accepted bid" });
+  }
+
+  res.json({
+    amount: bid.amount,          // MATIC
+    walletAddress: bid.walletAddress
+  });
+};
+
+
+exports.confirmPayment = async (req, res) => {
+  const { txHash } = req.body;
+
+  // (Blockchain dev later verifies txHash on Polygon)
+
+  await Listing.findByIdAndUpdate(req.params.listingId, {
+    soldAt: new Date(),
+    isOpen: false
+  });
+
+  res.json({ success: true });
+};
+

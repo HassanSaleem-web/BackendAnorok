@@ -21,7 +21,8 @@ const allowedOrigins = [
   process.env.CLIENT_ORIGIN,
   'https://dashboard-3wi1.onrender.com',
   'http://localhost:3000',
-  'http://127.0.0.1:5500'
+  'http://127.0.0.1:5500',
+  'http://localhost:8080'
 ];
 
 // Allow undefined origin (curl, mobile apps)
