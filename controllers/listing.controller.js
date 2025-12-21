@@ -10,6 +10,7 @@ exports.createListing = async (req, res) => {
     const userId = req.user.id;
 
     const {
+      projectId,            // 🔥 NEW REQUIRED FIELD
       title,
       description,
       tags,
@@ -19,6 +20,14 @@ exports.createListing = async (req, res) => {
       percentageCompleted
     } = req.body;
 
+    // Validate projectId
+    if (!projectId) {
+      return res.status(400).json({
+        success: false,
+        error: "projectId is required to create a listing"
+      });
+    }
+
     // Cloudinary image (single)
     let imageUrl = null;
     if (req.file) {
@@ -27,6 +36,7 @@ exports.createListing = async (req, res) => {
 
     const listing = await Listing.create({
       userId,
+      projectId,                      // 🔥 NEW
       title,
       description,
       tags: tags ? JSON.parse(tags) : [],
@@ -64,7 +74,7 @@ exports.updateListing = async (req, res) => {
     // Prepare safe update object
     const updates = {};
 
-    // Only update fields if present
+    // Allowed fields for update
     const fields = [
       "title",
       "description",
@@ -89,12 +99,15 @@ exports.updateListing = async (req, res) => {
       }
     }
 
-    // If new Cloudinary image uploaded
+    // Cloudinary image update
     if (req.file) {
-      updates.attachment = req.file.path; // Cloudinary URL
+      updates.attachment = req.file.path;
     }
 
-    // Apply updates
+    // ❗ DO NOT ALLOW CHANGES TO:
+    // projectId, bids, winningBidId, soldTo, soldAt, isOpen
+    // (keeps everything backward-compatible)
+
     Object.assign(listing, updates);
     await listing.save();
 
@@ -166,5 +179,159 @@ exports.getAllListings = async (req, res) => {
   } catch (err) {
     console.error("❌ Error getting all listings:", err);
     res.status(500).json({ success: false, error: err.message });
+  }
+};
+// --------------------------------------------------
+// PLACE / UPDATE BID
+// --------------------------------------------------
+exports.placeBid = async (req, res) => {
+  try {
+    const { amount, message } = req.body;
+    const listing = await Listing.findById(req.params.id);
+
+    if (!listing) {
+      return res.status(404).json({ message: "Listing not found" });
+    }
+
+    if (!listing.isOpen) {
+      return res.status(400).json({ message: "Bidding is closed" });
+    }
+
+    if (listing.userId.toString() === req.user.id.toString()) {
+      return res.status(403).json({ message: "You cannot bid on your own listing" });
+    }
+
+    if (!amount || amount <= 0) {
+      return res.status(400).json({ message: "Invalid bid amount" });
+    }
+
+    const existingBid = listing.bids.find(
+      (b) =>
+        b.userId.toString() === req.user.id.toString() &&
+        b.status === "pending"
+    );
+
+    if (existingBid) {
+      existingBid.amount = amount;
+      existingBid.message = message;
+      existingBid.createdAt = new Date();
+    } else {
+      listing.bids.push({
+        userId: req.user.id,
+        amount,
+        message,
+      });
+    }
+
+    await listing.save();
+
+    res.json({
+      success: true,
+      bidsCount: listing.bids.length,
+    });
+  } catch (err) {
+    console.error("❌ placeBid error:", err);
+    res.status(500).json({ message: "Failed to place bid" });
+  }
+};
+// --------------------------------------------------
+// GET BIDS FOR LISTING
+// --------------------------------------------------
+exports.getListingBids = async (req, res) => {
+  try {
+    const listing = await Listing.findById(req.params.id)
+      .populate("bids.userId", "fullName email");
+
+    if (!listing) {
+      return res.status(404).json({ message: "Listing not found" });
+    }
+
+    const isOwner = listing.userId.toString() === req.user.id.toString();
+
+    const bids = isOwner
+      ? listing.bids
+      : listing.bids.filter(
+          (b) => b.userId._id.toString() === req.user.id.toString()
+        );
+
+    res.json({ success: true, bids });
+  } catch (err) {
+    console.error("❌ getListingBids error:", err);
+    res.status(500).json({ message: "Failed to fetch bids" });
+  }
+};
+// --------------------------------------------------
+// REJECT BID (OWNER ONLY)
+// --------------------------------------------------
+exports.rejectBid = async (req, res) => {
+  try {
+    const { id, bidId } = req.params;
+    const listing = await Listing.findById(id);
+
+    if (!listing) {
+      return res.status(404).json({ message: "Listing not found" });
+    }
+
+    if (listing.userId.toString() !== req.user.id.toString()) {
+      return res.status(403).json({ message: "Unauthorized" });
+    }
+
+    const bid = listing.bids.id(bidId);
+    if (!bid) {
+      return res.status(404).json({ message: "Bid not found" });
+    }
+
+    if (bid.status === "accepted") {
+      return res.status(400).json({ message: "Cannot reject accepted bid" });
+    }
+
+    bid.status = "rejected";
+    await listing.save();
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error("❌ rejectBid error:", err);
+    res.status(500).json({ message: "Failed to reject bid" });
+  }
+};
+// --------------------------------------------------
+// ACCEPT BID (OWNER ONLY)
+// --------------------------------------------------
+exports.acceptBid = async (req, res) => {
+  try {
+    const { id, bidId } = req.params;
+    const listing = await Listing.findById(id);
+
+    if (!listing) {
+      return res.status(404).json({ message: "Listing not found" });
+    }
+
+    if (listing.userId.toString() !== req.user.id.toString()) {
+      return res.status(403).json({ message: "Unauthorized" });
+    }
+
+    const bid = listing.bids.id(bidId);
+    if (!bid) {
+      return res.status(404).json({ message: "Bid not found" });
+    }
+
+    bid.status = "accepted";
+    listing.winningBidId = bid._id;
+    listing.soldTo = bid.userId;
+    listing.soldAt = new Date();
+    listing.isOpen = false;
+
+    listing.bids.forEach((b) => {
+      if (b._id.toString() !== bidId) {
+        b.status = "rejected";
+      }
+    });
+
+    await listing.save();
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error("❌ acceptBid error:", err);
+    res.status(500).json({ message: "Failed to accept bid" });
   }
 };

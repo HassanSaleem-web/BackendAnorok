@@ -10,8 +10,13 @@ const {
   updateListing,
   deleteListing,
   getMyListings,
-  getAllListings
+  getAllListings,
+  placeBid,
+  rejectBid,
+  acceptBid,
+  getListingBids
 } = require("../controllers/listing.controller");
+const { authenticate } = require("passport");
 
 
 // --------------------------------------------------
@@ -41,7 +46,18 @@ router.put("/:id", auth, upload.single("image"), updateListing);
 // --------------------------------------------------
 // DELETE listing
 // --------------------------------------------------
-router.delete("/:id", auth, deleteListing);
+router.delete("/:id/delete", auth, deleteListing);
+// Place or update bid
+router.post("/:id/bids", auth, placeBid);
+
+// Get bids for listing
+router.get("/:id/bids", auth, getListingBids);
+
+// Accept bid (owner only)
+router.put("/:id/bids/:bidId/accept", auth, acceptBid);
+
+// Reject bid (owner only)
+router.put("/:id/bids/:bidId/reject", auth, rejectBid);
 
 
 module.exports = router;

@@ -13,7 +13,7 @@ exports.saveOrUpdateProject = async (req, res) => {
       chatSummary,
       milestones,
       tools,
-      status   // ← NEW FIELD
+      status
     } = req.body;
 
     // Normalize milestones
@@ -26,12 +26,12 @@ exports.saveOrUpdateProject = async (req, res) => {
 
     let project;
 
-    // -----------------------
-    // UPDATE PROJECT
-    // -----------------------
+    // ----------------------------------------------------
+    // UPDATE PROJECT (Only owner can update)
+    // ----------------------------------------------------
     if (_id) {
       project = await Project.findOneAndUpdate(
-        { _id, userId }, 
+        { _id, userId },    // ensure the logged-in user is the current owner
         {
           projectName,
           projectLogo,
@@ -39,7 +39,7 @@ exports.saveOrUpdateProject = async (req, res) => {
           chatSummary,
           milestones: formattedMilestones,
           tools,
-          ...(status && { status })   // ← Only update if provided
+          ...(status && { status })   // status only updates if provided
         },
         { new: true }
       );
@@ -54,18 +54,27 @@ exports.saveOrUpdateProject = async (req, res) => {
       return res.json({ success: true, project });
     }
 
-    // -----------------------
+    // ----------------------------------------------------
     // CREATE NEW PROJECT
-    // -----------------------
+    // ----------------------------------------------------
     project = await Project.create({
-      userId,
+      userId,                     // current owner
+      createdBy: userId,          // immutable — original creator
       projectName,
       projectLogo,
       message,
       chatSummary,
       milestones: formattedMilestones,
       tools,
-      status: status || "live"   // ← NEW: default 'live'
+      status: status || "live",
+
+      // first ownership entry
+      ownershipHistory: [
+        {
+          userId,
+          changedAt: new Date()
+        }
+      ]
     });
 
     return res.json({ success: true, project });

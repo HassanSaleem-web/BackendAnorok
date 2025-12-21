@@ -18,6 +18,6 @@ params: {
 }
 
 });
-const upload = multer({ storage, message });
+const upload = multer({ storage });
 
 module.exports = upload;

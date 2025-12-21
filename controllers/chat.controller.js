@@ -158,14 +158,22 @@ exports.saveChatSession = async (req, res) => {
     // Create Project using NEW model
     // -------------------------------
     const project = await Project.create({
-      userId,
+      userId,            // current owner
+      createdBy: userId, // original creator (required)
       projectName,
       projectLogo: "",
       message: fullChat,
       chatSummary,
       milestones,
-      tools: []
+      tools: [],
+      ownershipHistory: [
+        {
+          userId,
+          changedAt: new Date()
+        }
+      ]
     });
+    
 
     console.log("✅ Project created:", project._id);
 

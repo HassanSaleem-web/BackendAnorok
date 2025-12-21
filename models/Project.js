@@ -11,10 +11,19 @@ const milestoneSchema = new mongoose.Schema({
 });
 
 const projectSchema = new mongoose.Schema({
+  // 🔹 CURRENT OWNER (changes after sale)
   userId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: "User",
     required: true
+  },
+
+  // 🔹 ORIGINAL CREATOR (immutable)
+  createdBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "User",
+    required: true,
+    immutable: true   // prevents modification after creation
   },
 
   username: {
@@ -43,12 +52,22 @@ const projectSchema = new mongoose.Schema({
 
   milestones: [milestoneSchema],
   tools: [String],
-  
+
+  // 🔹 PROJECT STATUS
   status: {
     type: String,
     enum: ["live", "listed"],
     default: "live"
   },
+
+  // 🔹 OPTIONAL: OWNERSHIP HISTORY (for tracking transfers)
+  ownershipHistory: [
+    {
+      userId: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+      changedAt: { type: Date, default: Date.now }
+    }
+  ],
+
   createdAt: {
     type: Date,
     default: Date.now
