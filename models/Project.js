@@ -33,12 +33,14 @@ const projectSchema = new mongoose.Schema({
 
   message: {
     type: String,
-    required: true
+    required: true,
+    maxlength: 50000 // Limit to prevent 16MB document ballooning
   },
 
   projectName: {
     type: String,
-    required: true
+    required: true,
+    maxlength: 100
   },
 
   projectLogo: {
@@ -47,11 +49,12 @@ const projectSchema = new mongoose.Schema({
 
   chatSummary: {
     type: String,
-    required: true
+    required: true,
+    maxlength: 10000 // Limit summary length
   },
 
   milestones: [milestoneSchema],
-  tools: [String],
+  tools: [{ type: String, maxlength: 50 }], // Limit array string sizes
 
   // 🔹 PROJECT STATUS
   status: {
@@ -72,6 +75,12 @@ const projectSchema = new mongoose.Schema({
     type: Date,
     default: Date.now
   }
-});
+}, { timestamps: true, optimisticConcurrency: true });
+
+// Performance Indexes
+projectSchema.index({ userId: 1 });
+projectSchema.index({ createdBy: 1 });
+projectSchema.index({ status: 1 });
+projectSchema.index({ createdAt: -1 });
 
 module.exports = mongoose.model('Project', projectSchema);

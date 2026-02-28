@@ -16,7 +16,8 @@ const {
   acceptBid,
   getListingBids,
   getPaymentInfo,
-  confirmPayment
+  confirmPayment,
+  getMyActivity
 } = require("../controllers/listing.controller");
 const { authenticate } = require("passport");
 
@@ -31,6 +32,8 @@ router.get("/public", getAllListings);
 // GET listings of logged-in user
 // --------------------------------------------------
 router.get("/", auth, getMyListings);
+
+router.get("/activity", auth, getMyActivity);
 
 
 // --------------------------------------------------

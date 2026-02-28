@@ -14,7 +14,9 @@ const ConversationSchema = new mongoose.Schema(
       default: "",
     },
   },
-  { timestamps: true }
+  { timestamps: true, optimisticConcurrency: true }
 );
+
+ConversationSchema.index({ participants: 1, updatedAt: -1 });
 
 module.exports = mongoose.model("Conversation", ConversationSchema);

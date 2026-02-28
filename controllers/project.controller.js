@@ -1,89 +1,40 @@
 // project.controller.js
-const Project = require('../models/Project');
+const projectService = require('../services/project.service');
+const auditLogger = require('../utils/auditLogger');
+
+exports.getMyProjects = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { cursor, limit } = req.query;
+
+    const { projects, nextCursor } = await projectService.getProjectsByUser(userId, cursor, limit);
+
+    res.json({ success: true, projects, nextCursor });
+  } catch (err) {
+    console.error('❌ Error fetching projects:', err);
+    res.status(err.status || 500).json({ success: false, error: err.status ? err.message : 'Server error' });
+  }
+};
 
 exports.saveOrUpdateProject = async (req, res) => {
   try {
-    const userId = req.user.id; // From JWT middleware
+    const userId = req.user.id;
+    const isUpdate = !!req.body._id;
 
-    const {
-      _id,
-      projectName,
-      projectLogo,
-      message,
-      chatSummary,
-      milestones,
-      tools,
-      status
-    } = req.body;
+    const project = await projectService.saveOrUpdateProject(userId, req.body);
 
-    // Normalize milestones
-    const formattedMilestones = (milestones || []).map(m => ({
-      step: m.step,
-      title: m.title,
-      description: m.description,
-      completed: m.completed || false
-    }));
-
-    let project;
-
-    // ----------------------------------------------------
-    // UPDATE PROJECT (Only owner can update)
-    // ----------------------------------------------------
-    if (_id) {
-      project = await Project.findOneAndUpdate(
-        { _id, userId },    // ensure the logged-in user is the current owner
-        {
-          projectName,
-          projectLogo,
-          message,
-          chatSummary,
-          milestones: formattedMilestones,
-          tools,
-          ...(status && { status })   // status only updates if provided
-        },
-        { new: true }
-      );
-
-      if (!project) {
-        return res.status(403).json({
-          success: false,
-          error: "Unauthorized or project not found"
-        });
-      }
-
-      return res.json({ success: true, project });
-    }
-
-    // ----------------------------------------------------
-    // CREATE NEW PROJECT
-    // ----------------------------------------------------
-    project = await Project.create({
-      userId,                     // current owner
-      createdBy: userId,          // immutable — original creator
-      projectName,
-      projectLogo,
-      message,
-      chatSummary,
-      milestones: formattedMilestones,
-      tools,
-      status: status || "live",
-
-      // first ownership entry
-      ownershipHistory: [
-        {
-          userId,
-          changedAt: new Date()
-        }
-      ]
+    await auditLogger.logAction(userId, isUpdate ? 'PROJECT_UPDATED' : 'PROJECT_CREATED', req, {
+      resourceId: project._id,
+      resourceModel: 'Project',
+      metadata: { title: project.projectName }
     });
 
-    return res.json({ success: true, project });
-
+    res.json({ success: true, project });
   } catch (err) {
     console.error("❌ Error saving project:", err);
-    res.status(500).json({
+    res.status(err.status || 500).json({
       success: false,
-      error: err.message
+      error: err.status ? err.message : err.message
     });
   }
 };

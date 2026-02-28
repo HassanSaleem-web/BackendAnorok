@@ -26,7 +26,10 @@ const MessageSchema = new mongoose.Schema(
       default: false,
     },
   },
-  { timestamps: true }
+  { timestamps: true, optimisticConcurrency: true }
 );
+
+MessageSchema.index({ conversationId: 1, createdAt: 1 }); // Optimize loading chat history
+MessageSchema.index({ receiverId: 1, read: 1 }); // Optimize unread message counts
 
 module.exports = mongoose.model("Message", MessageSchema);

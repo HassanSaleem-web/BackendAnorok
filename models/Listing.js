@@ -1,39 +1,6 @@
 const mongoose = require("mongoose");
 
-const bidSchema = new mongoose.Schema({
-  userId: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: "User",
-    required: true
-  },
-
-  amount: {
-    type: Number,
-    required: true
-  },
-
-  message: {
-    type: String,
-    default: ""
-  },
-
-  status: {
-    type: String,
-    enum: ["pending", "accepted", "rejected", "paid"],
-    default: "pending"
-  },
-
-  // ✅ NEW: Wallet address where bidder must send payment
-  walletAddress: {
-    type: String,
-    default: null
-  },
-
-  createdAt: {
-    type: Date,
-    default: Date.now
-  }
-});
+// Bid module extracted to models/Bid.js for scalability
 
 const ListingSchema = new mongoose.Schema(
   {
@@ -75,11 +42,7 @@ const ListingSchema = new mongoose.Schema(
     // 🔹 OPEN / CLOSED LISTING STATUS
     isOpen: { type: Boolean, default: true },
 
-    // 🔹 BIDDING SYSTEM
-    bids: {
-      type: [bidSchema],
-      default: []
-    },
+    // Bids removed to fix 16MB limit. Bids now stored in the Bids collection referencing this ListingId.
 
     // 🔹 Final accepted bid (if any)
     winningBidId: {
@@ -99,7 +62,13 @@ const ListingSchema = new mongoose.Schema(
       default: null
     }
   },
-  { timestamps: true }
+  { timestamps: true, optimisticConcurrency: true }
 );
+
+// Add scalable Indexes
+ListingSchema.index({ userId: 1 });
+ListingSchema.index({ projectId: 1 });
+ListingSchema.index({ isOpen: 1 });
+ListingSchema.index({ createdAt: -1 }); // For feed sorting
 
 module.exports = mongoose.model("Listing", ListingSchema);

@@ -7,10 +7,10 @@ const userSchema = new mongoose.Schema({
     required: true,
     trim: true,
   },
-  email: { 
-    type: String, 
-    required: true, 
-    unique: true, 
+  email: {
+    type: String,
+    required: true,
+    unique: true,
     lowercase: true,
     trim: true,
   },
@@ -18,17 +18,37 @@ const userSchema = new mongoose.Schema({
     type: String,
     required: true,
   },
- 
+
+  role: {
+    type: String,
+    enum: ['user', 'admin', 'moderator'],
+    default: 'user',
+  },
+
+  bio: {
+    type: String,
+    default: '',
+    trim: true,
+  },
+  walletAddress: {
+    type: String,
+    default: '',
+    trim: true,
+  },
+  skills: {
+    type: [String],
+    default: [],
+  },
 
   // Optional: keep googleId if you ever re-add Google login in future
-  googleId: { 
-    type: String, 
-    unique: true, 
+  googleId: {
+    type: String,
+    unique: true,
     sparse: true,
   },
 
-  createdAt: { 
-    type: Date, 
+  createdAt: {
+    type: Date,
     default: Date.now,
   },
 });

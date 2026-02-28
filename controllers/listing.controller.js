@@ -1,396 +1,159 @@
-const Listing = require("../models/Listing");
+const listingService = require('../services/listing.service');
+const auditLogger = require('../utils/auditLogger');
 
-//
-// --------------------------------------------------
-// CREATE LISTING  (Single Cloudinary Image)
-// --------------------------------------------------
-//
 exports.createListing = async (req, res) => {
   try {
-    const userId = req.user.id;
+    const listing = await listingService.createListing(req.user.id, req.body, req.file);
 
-    const {
-      projectId,            // 🔥 NEW REQUIRED FIELD
-      title,
-      description,
-      tags,
-      price,
-      priceType,
-      deadline,
-      percentageCompleted
-    } = req.body;
-
-    // Validate projectId
-    if (!projectId) {
-      return res.status(400).json({
-        success: false,
-        error: "projectId is required to create a listing"
-      });
-    }
-
-    // Cloudinary image (single)
-    let imageUrl = null;
-    if (req.file) {
-      imageUrl = req.file.path;  // Cloudinary secure URL
-    }
-
-    const listing = await Listing.create({
-      userId,
-      projectId,                      // 🔥 NEW
-      title,
-      description,
-      tags: tags ? JSON.parse(tags) : [],
-      price: Number(price),
-      priceType,
-      deadline: deadline || null,
-      percentageCompleted: Number(percentageCompleted) || 0,
-      attachment: imageUrl
+    await auditLogger.logAction(req.user.id, 'LISTING_CREATED', req, {
+      resourceId: listing._id,
+      resourceModel: 'Listing',
+      metadata: { projectId: listing.projectId }
     });
-
-    return res.json({ success: true, listing });
-
-  } catch (err) {
-    console.error("❌ Error creating listing:", err);
-    res.status(500).json({ success: false, error: err.message });
-  }
-};
-
-
-//
-// --------------------------------------------------
-// UPDATE LISTING  (Optional new image)
-// --------------------------------------------------
-//
-exports.updateListing = async (req, res) => {
-  try {
-    const userId = req.user.id;
-    const listingId = req.params.id;
-
-    const listing = await Listing.findOne({ _id: listingId, userId });
-    if (!listing) {
-      return res.status(403).json({ success: false, error: "Not authorized" });
-    }
-
-    // Prepare safe update object
-    const updates = {};
-
-    // Allowed fields for update
-    const fields = [
-      "title",
-      "description",
-      "price",
-      "priceType",
-      "deadline",
-      "percentageCompleted"
-    ];
-
-    fields.forEach(field => {
-      if (req.body[field] !== undefined) {
-        updates[field] = req.body[field];
-      }
-    });
-
-    // Parse tags safely
-    if (req.body.tags) {
-      try {
-        updates.tags = JSON.parse(req.body.tags);
-      } catch (e) {
-        console.log("Invalid tags JSON");
-      }
-    }
-
-    // Cloudinary image update
-    if (req.file) {
-      updates.attachment = req.file.path;
-    }
-
-    // ❗ DO NOT ALLOW CHANGES TO:
-    // projectId, bids, winningBidId, soldTo, soldAt, isOpen
-    // (keeps everything backward-compatible)
-
-    Object.assign(listing, updates);
-    await listing.save();
 
     res.json({ success: true, listing });
+  } catch (err) {
+    console.error("❌ Error creating listing:", err);
+    res.status(err.status || 500).json({ success: false, error: err.message });
+  }
+};
 
+exports.updateListing = async (req, res) => {
+  try {
+    const listing = await listingService.updateListing(req.user.id, req.params.id, req.body, req.file);
+
+    await auditLogger.logAction(req.user.id, 'LISTING_UPDATED', req, {
+      resourceId: listing._id,
+      resourceModel: 'Listing'
+    });
+
+    res.json({ success: true, listing });
   } catch (err) {
     console.error("❌ Error updating listing:", err);
-    res.status(500).json({ success: false, error: err.message });
+    res.status(err.status || 500).json({ success: false, error: err.message });
   }
 };
 
-
-//
-// --------------------------------------------------
-// DELETE LISTING
-// --------------------------------------------------
-//
 exports.deleteListing = async (req, res) => {
   try {
-    const userId = req.user.id;
-    const listingId = req.params.id;
-
-    const listing = await Listing.findOne({ _id: listingId, userId });
-
-    if (!listing) {
-      return res.status(403).json({ success: false, error: "Not authorized" });
-    }
-
-    await listing.deleteOne();
-
+    await listingService.deleteListing(req.user.id, req.params.id);
     res.json({ success: true, message: "Listing deleted" });
-
   } catch (err) {
     console.error("❌ Error deleting listing:", err);
-    res.status(500).json({ success: false, error: err.message });
+    res.status(err.status || 500).json({ success: false, error: err.message });
   }
 };
 
-
-//
-// --------------------------------------------------
-// GET ALL LISTINGS FOR CURRENT USER (Protected)
-// --------------------------------------------------
-//
 exports.getMyListings = async (req, res) => {
   try {
-    const userId = req.user.id;
-
-    const listings = await Listing.find({ userId }).sort({ createdAt: -1 });
-
-    res.json({ success: true, listings });
-
+    const { cursor, limit } = req.query;
+    const { listings, nextCursor } = await listingService.getMyListings(req.user.id, cursor, limit);
+    res.json({ success: true, listings, nextCursor });
   } catch (err) {
     console.error("❌ Error getting listings:", err);
-    res.status(500).json({ success: false, error: err.message });
+    res.status(err.status || 500).json({ success: false, error: err.message });
   }
 };
 
-
-//
-// --------------------------------------------------
-// GET ALL LISTINGS (Public—for Explore page)
-// --------------------------------------------------
-//
 exports.getAllListings = async (req, res) => {
   try {
-    const listings = await Listing.find().sort({ createdAt: -1 });
-    res.json({ success: true, listings });
+    const { cursor, limit } = req.query;
+    const { listings, nextCursor } = await listingService.getAllListings(cursor, limit);
+    res.json({ success: true, listings, nextCursor });
   } catch (err) {
     console.error("❌ Error getting all listings:", err);
-    res.status(500).json({ success: false, error: err.message });
+    res.status(err.status || 500).json({ success: false, error: err.message });
   }
 };
-// --------------------------------------------------
-// PLACE / UPDATE BID
-// --------------------------------------------------
+
 exports.placeBid = async (req, res) => {
   try {
     const { amount, message } = req.body;
-    const listing = await Listing.findById(req.params.id);
+    const bidsCount = await listingService.placeBid(req.user.id, req.params.id, amount, message);
 
-    if (!listing) {
-      return res.status(404).json({ message: "Listing not found" });
-    }
-
-    if (!listing.isOpen) {
-      return res.status(400).json({ message: "Bidding is closed" });
-    }
-
-    if (listing.userId.toString() === req.user.id.toString()) {
-      return res.status(403).json({ message: "You cannot bid on your own listing" });
-    }
-
-    if (!amount || amount <= 0) {
-      return res.status(400).json({ message: "Invalid bid amount" });
-    }
-
-    // ✅ ADD THIS BLOCK HERE
-    if (Number(amount) < Number(listing.minimumAmount)) {
-      return res.status(400).json({
-        success: false,
-        message: `Minimum bid is ${listing.minimumAmount} ETH`
-      });
-    }
-
-    const existingBid = listing.bids.find(
-      (b) =>
-        b.userId.toString() === req.user.id.toString() &&
-        b.status === "pending"
-    );
-
-    if (existingBid) {
-      existingBid.amount = amount;
-      existingBid.message = message;
-      existingBid.createdAt = new Date();
-    } else {
-      listing.bids.push({
-        userId: req.user.id,
-        amount,
-        message,
-      });
-    }
-
-    await listing.save();
-
-    res.json({
-      success: true,
-      bidsCount: listing.bids.length,
+    await auditLogger.logAction(req.user.id, 'BID_PLACED', req, {
+      resourceId: req.params.id, // Targeting the listing
+      resourceModel: 'Listing',
+      metadata: { amount }
     });
+
+    res.json({ success: true, bidsCount });
   } catch (err) {
     console.error("❌ placeBid error:", err);
-    res.status(500).json({ message: "Failed to place bid" });
+    res.status(err.status || 500).json({ success: false, message: err.message });
   }
 };
 
-// --------------------------------------------------
-// GET BIDS FOR LISTING
-// --------------------------------------------------
 exports.getListingBids = async (req, res) => {
   try {
-    const listing = await Listing.findById(req.params.id)
-      .populate("bids.userId", "fullName email");
-
-    if (!listing) {
-      return res.status(404).json({ message: "Listing not found" });
-    }
-
-    const isOwner = listing.userId.toString() === req.user.id.toString();
-
-    const bids = isOwner
-      ? listing.bids
-      : listing.bids.filter(
-          (b) => b.userId._id.toString() === req.user.id.toString()
-        );
-
+    const bids = await listingService.getListingBids(req.user.id, req.params.id);
     res.json({ success: true, bids });
   } catch (err) {
     console.error("❌ getListingBids error:", err);
-    res.status(500).json({ message: "Failed to fetch bids" });
+    res.status(err.status || 500).json({ success: false, message: err.message });
   }
 };
-// --------------------------------------------------
-// REJECT BID (OWNER ONLY)
-// --------------------------------------------------
+
 exports.rejectBid = async (req, res) => {
   try {
-    const { id, bidId } = req.params;
-    const listing = await Listing.findById(id);
-
-    if (!listing) {
-      return res.status(404).json({ message: "Listing not found" });
-    }
-
-    if (listing.userId.toString() !== req.user.id.toString()) {
-      return res.status(403).json({ message: "Unauthorized" });
-    }
-
-    const bid = listing.bids.id(bidId);
-    if (!bid) {
-      return res.status(404).json({ message: "Bid not found" });
-    }
-
-    if (bid.status === "accepted") {
-      return res.status(400).json({ message: "Cannot reject accepted bid" });
-    }
-
-    bid.status = "rejected";
-    await listing.save();
-
+    await listingService.rejectBid(req.user.id, req.params.id, req.params.bidId);
     res.json({ success: true });
   } catch (err) {
     console.error("❌ rejectBid error:", err);
-    res.status(500).json({ message: "Failed to reject bid" });
+    res.status(err.status || 500).json({ success: false, message: err.message });
   }
 };
-// --------------------------------------------------
-// ACCEPT BID (OWNER ONLY)
-// --------------------------------------------------
+
 exports.acceptBid = async (req, res) => {
   try {
-    const { id, bidId } = req.params;
-    const listing = await Listing.findById(id);
+    await listingService.acceptBid(req.user.id, req.params.id, req.params.bidId, req.body.walletAddress);
 
-    if (!listing) {
-      return res.status(404).json({ message: "Listing not found" });
-    }
-    const { walletAddress } = req.body;
-
-    if (!walletAddress) {
-      return res.status(400).json({
-        success: false,
-        message: "Wallet address is required to accept a bid"
-      });
-    }
-    // basic validation (recommended)
-    if (!/^0x[a-fA-F0-9]{40}$/.test(walletAddress)) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid wallet address"
-      });
-    }
-
-    if (listing.userId.toString() !== req.user.id.toString()) {
-      return res.status(403).json({ message: "Unauthorized" });
-    }
-
-    const bid = listing.bids.id(bidId);
-    if (!bid) {
-      return res.status(404).json({ message: "Bid not found" });
-    }
-
-    bid.status = "accepted";
-    bid.walletAddress = walletAddress;
-    listing.winningBidId = bid._id;
-    listing.soldTo = bid.userId;
-    listing.soldAt = new Date();
-    listing.isOpen = false;
-
-    listing.bids.forEach((b) => {
-      if (b._id.toString() !== bidId) {
-        b.status = "rejected";
-      }
+    await auditLogger.logAction(req.user.id, 'BID_ACCEPTED', req, {
+      resourceId: req.params.id, // Listing ID
+      resourceModel: 'Listing',
+      metadata: { acceptedBidId: req.params.bidId, walletProvided: !!req.body.walletAddress }
     });
-
-    await listing.save();
 
     res.json({ success: true });
   } catch (err) {
     console.error("❌ acceptBid error:", err);
-    res.status(500).json({ message: "Failed to accept bid" });
+    res.status(err.status || 500).json({ success: false, message: err.message });
   }
 };
 
 exports.getPaymentInfo = async (req, res) => {
-  console.log(req.params.listingId);
-  const listing = await Listing.findById(req.params.listingId);
-  
-  if (!listing) {
-    return res.status(404).json({ message: "Listing not found" });
+  try {
+    const info = await listingService.getPaymentInfo(req.params.listingId);
+    res.json(info);
+  } catch (err) {
+    console.error("❌ getPaymentInfo error:", err);
+    res.status(err.status || 500).json({ success: false, message: err.message });
   }
-
-  const bid = listing.bids.find(b => b.status === "accepted");
-  if (!bid) {
-    return res.status(400).json({ message: "No accepted bid" });
-  }
-
-  res.json({
-    amount: bid.amount,          // MATIC
-    walletAddress: bid.walletAddress
-  });
 };
-
 
 exports.confirmPayment = async (req, res) => {
-  const { txHash } = req.body;
+  try {
+    await listingService.confirmPayment(req.user.id, req.params.listingId, req.body.txHash);
 
-  // (Blockchain dev later verifies txHash on Polygon)
+    await auditLogger.logAction(req.user.id, 'PAYMENT_COMPLETED', req, {
+      resourceId: req.params.listingId,
+      resourceModel: 'Listing',
+      metadata: { txHash: req.body.txHash }
+    });
 
-  await Listing.findByIdAndUpdate(req.params.listingId, {
-    soldAt: new Date(),
-    isOpen: false
-  });
-
-  res.json({ success: true });
+    res.json({ success: true });
+  } catch (err) {
+    console.error("❌ confirmPayment error:", err);
+    res.status(err.status || 500).json({ success: false, error: err.message });
+  }
 };
 
+exports.getMyActivity = async (req, res) => {
+  try {
+    const activity = await listingService.getMyActivity(req.user.id);
+    res.json({ success: true, activity });
+  } catch (err) {
+    console.error("❌ getMyActivity error:", err);
+    res.status(err.status || 500).json({ success: false, error: err.message });
+  }
+};
