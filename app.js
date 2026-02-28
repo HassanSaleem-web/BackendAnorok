@@ -35,7 +35,8 @@ const app = express();
 // -----------------------------------------------
 const allowedOrigins = [
   process.env.CLIENT_ORIGIN,
-  'https://dashboard-3wi1.onrender.com',
+  'https://dashboard-3wi1.onrender.com', // Legacy
+  'https://genex-frontend-k3s1.onrender.com', // Deployed Next.js Production
   'http://localhost:3000',
   'http://127.0.0.1:5500',
   'http://localhost:8080'
